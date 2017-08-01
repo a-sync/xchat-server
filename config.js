@@ -4,8 +4,9 @@ const minimist = require('minimist');
 
 let argv = minimist(process.argv.slice(2), {
     default:               {
-        PORT:       8090,
-        API_KEY:    'yyy'
+        API_URL:    'https://localhost/base/xchat-api',
+        API_KEY:    'yyy',
+        PORT:       8090
     }
 });
 
