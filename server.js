@@ -54,16 +54,18 @@ var rtcApp = function(err, appObj) {
     if (err) console.error(err);
     console.log('xchat-server init...');
 
-    appObj.events.on('authenticate', authenticateListener);
+    appObj.events.on('authenticate', authListener);
 
     appObj.events.on('authenticated', authSuccess);
 
     appObj.events.on('easyrtcAuth', rtcAuthCallback);
 
     appObj.events.on('easyrtcCmd', rtcCmd);
+
+    appObj.events.on('easyrtcMsg', rtcMsg);
 };
 
-function authenticateListener(socket, easyrtcid, appName, username, credential, easyrtcAuthMessage, next) {
+function authListener(socket, easyrtcid, appName, username, credential, easyrtcAuthMessage, next) {
     console.log('! authenticate', username);// easyrtcid, appName, username, credential);
 
     if (username !== credential.name) next('Invalid auth.');
@@ -138,7 +140,7 @@ function rtcAuthCallback(socket, easyrtcid, msg, socketCallback, callback) {
         }
 
         connectionObj.setField('credential', msg.msgData.credential, {"isShared": false});
-        console.log('! cred', connectionObj.getFieldValueSync('credential'));
+        //console.log('! cred', connectionObj.getFieldValueSync('credential'));
 
         callback(err, connectionObj);
     });
@@ -149,12 +151,21 @@ function rtcCmd(connectionObj, msg, socketCallback, next) {
         case 'setPresence':
         case 'roomJoin':
         case 'getRoomList':
-            console.log('CMD BLOCKED', msg.msgType);
+            console.log('CMD BLOCKED', msg.msgType, connectionObj.getUsername());
             next(null);
             break;
         default:
             easyrtc.events.defaultListeners.easyrtcCmd(connectionObj, msg, socketCallback, next);
     }
+}
+
+function rtcMsg(connectionObj, msg, socketCallback, next) {
+    if (msg.msgType === 'message') {
+        //TODO: chat log?
+        console.log('CHAT|'+(msg.targetRoom||msg.targetEasyrtcid)+'|', connectionObj.getUsername()+':', msg.msgData);
+    }
+
+    easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
 }
 
 //listen on port PORT
