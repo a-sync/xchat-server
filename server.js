@@ -80,7 +80,7 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
             })
             .catch(err => {
                 //TODO: next action? reload? ajax for new token?
-                next('Failed auth.');
+                next('Failed auth. ' + (err.error?err.error:''));
             });
     }
 }
