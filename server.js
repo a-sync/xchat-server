@@ -31,7 +31,7 @@ easyrtc.setOption("apiLabsEnable", false);
 easyrtc.setOption("demosEnable", false);
 easyrtc.setOption("updateCheckEnable", false);
 easyrtc.setOption("usernameRegExp", /^[a-z0-9_.-]{1,32}$/i);
-easyrtc.setOption("presenceShowRegExp", /^(online|offline)$/);
+easyrtc.setOption("presenceShowRegExp", /^(online|offline|watching|hosting)$/);
 easyrtc.setOption("presenceStatusRegExp", /^(.){0,255}$/);
 
 var rtcServer = easyrtc.listen(
