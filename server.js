@@ -66,7 +66,7 @@ var rtcApp = function(err, appObj) {
 };
 
 function authListener(socket, easyrtcid, appName, username, credential, easyrtcAuthMessage, next) {
-    console.log('! authenticate', username);// easyrtcid, appName, username, credential);
+    if(CONFIG.DBG) console.log('! authenticate', username);// easyrtcid, appName, username, credential);
 
     if (username !== credential.name) next('Invalid auth.');
     else {
@@ -74,6 +74,8 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
             .then(validTokenData => {
                 credential.balance = validTokenData.balance || 0;
                 credential.is_model = validTokenData.is_model || false;
+                credential.model_name = validTokenData.model_name || '';
+                credential.model_id = validTokenData.model_id || 0;
 
                 customersData[easyrtcid] = validTokenData;
                 next(null);
@@ -93,7 +95,7 @@ function validateAuthToken(cred) {
                 else reject(res.body);
             })
             .catch(err => {
-                console.error('validateAuthToken.error', err);
+                if(CONFIG.DBG) console.error('validateAuthToken.error', err);
                 reject(err);
             });
     });
@@ -110,7 +112,7 @@ function apiCall(data) {
 }
 
 function authSuccess(connectionObj, next) {
-    console.log('! authenticated', connectionObj.getUsername());
+    if(CONFIG.DBG) console.log('! authenticated', connectionObj.getUsername());
 
     let easyrtcid = connectionObj.getEasyrtcid();
 
@@ -128,7 +130,7 @@ function authSuccess(connectionObj, next) {
     }
     else {
         let err = 'Missing auth credentials for: '+easyrtcid;
-        console.error(err, connectionObj);
+        if(CONFIG.DBG) console.error(err, connectionObj);
         next(new easyrtc.util.ConnectionError(err));
     }
 }
@@ -141,7 +143,7 @@ function rtcAuthCallback(socket, easyrtcid, msg, socketCallback, callback) {
         }
 
         connectionObj.setField('credential', msg.msgData.credential, {"isShared": false});
-        //console.log('! cred', connectionObj.getFieldValueSync('credential'));
+        if(CONFIG.DBG) console.log('! cred', connectionObj.getFieldValueSync('credential'));
 
         callback(err, connectionObj);
     });
@@ -156,6 +158,7 @@ function rtcCmd(connectionObj, msg, socketCallback, next) {
             next(null);
             break;
         default:
+            if(CONFIG.DBG) console.log('CMD|'+msg.msgType, connectionObj.getUsername(), msg.msgData);
             easyrtc.events.defaultListeners.easyrtcCmd(connectionObj, msg, socketCallback, next);
     }
 }
@@ -164,6 +167,13 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
     let is_model = connectionObj.getFieldValueSync('credential')['is_model'];
 
     switch (msg.msgType) {
+        case 'spend':
+            if (!is_model) {
+                console.log('spend', msg.msgData);//TODO
+                next(null);
+            }
+            else next('Permission denied!');
+            break;
         case 'getBalances':
             if (is_model) {
                 console.log('getBalances', msg.msgData);//TODO
@@ -178,15 +188,13 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
             }
             else next('Permission denied!');
             break;
-        case 'message':
-            //TODO: chat log?
-            console.log('CHAT|'+(msg.targetRoom||msg.targetEasyrtcid)+'|', connectionObj.getUsername()+':', msg.msgData);
+        case 'easyrtc_streamReceived'://stream received by customer
         default:
+            if(CONFIG.DBG) console.log('MSG|'+msg.msgType+'|'+(msg.targetRoom||msg.targetEasyrtcid), connectionObj.getUsername(), msg.msgData);
             easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
     }
 }
 
-//listen on port PORT
 webServer.listen(CONFIG.PORT, function () {
     console.log('xchat-server listening on https://localhost:'+CONFIG.PORT);
 });
