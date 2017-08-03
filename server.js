@@ -168,22 +168,12 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
 
     switch (msg.msgType) {
         case 'spend':
-            if (!is_model) {
-                console.log('spend', msg.msgData);//TODO
-                next(null);
-            }
-            else next('Permission denied!');
+            console.log('spend', msg.msgData);//TODO
+            next(null);
             break;
         case 'getBalances':
             if (is_model) {
                 console.log('getBalances', msg.msgData);//TODO
-                next(null);
-            }
-            else next('Permission denied!');
-            break;
-        case 'updBalances':
-            if (is_model) {
-                console.log('updBalances', msg.msgData);//TODO
                 next(null);
             }
             else next('Permission denied!');
