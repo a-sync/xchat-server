@@ -73,6 +73,7 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
         validateAuthToken(credential)
             .then(validTokenData => {
                 credential.balance = validTokenData.balance || 0;
+                credential.is_model = validTokenData.is_model || false;
 
                 customersData[easyrtcid] = validTokenData;
                 next(null);
@@ -160,12 +161,29 @@ function rtcCmd(connectionObj, msg, socketCallback, next) {
 }
 
 function rtcMsg(connectionObj, msg, socketCallback, next) {
-    if (msg.msgType === 'message') {
-        //TODO: chat log?
-        console.log('CHAT|'+(msg.targetRoom||msg.targetEasyrtcid)+'|', connectionObj.getUsername()+':', msg.msgData);
-    }
+    let is_model = connectionObj.getFieldValueSync('credential')['is_model'];
 
-    easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
+    switch (msg.msgType) {
+        case 'getBalances':
+            if (is_model) {
+                console.log('getBalances', msg.msgData);//TODO
+                next(null);
+            }
+            else next('Permission denied!');
+            break;
+        case 'updBalances':
+            if (is_model) {
+                console.log('updBalances', msg.msgData);//TODO
+                next(null);
+            }
+            else next('Permission denied!');
+            break;
+        case 'message':
+            //TODO: chat log?
+            console.log('CHAT|'+(msg.targetRoom||msg.targetEasyrtcid)+'|', connectionObj.getUsername()+':', msg.msgData);
+        default:
+            easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
+    }
 }
 
 //listen on port PORT
