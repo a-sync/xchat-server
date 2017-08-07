@@ -169,16 +169,42 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
     switch (msg.msgType) {
         case 'spend':
             console.log('spend', msg.msgData);//TODO
+            let msgObj = {
+                msgType: 'balances',
+                msgData: {
+                    balances: { //DEBUG
+                        name1: 10.11,
+                        name2: 12.22,
+                        name3: 13.33,
+                        name4: 14.44,
+                        name5: 15.55
+                    }
+                }
+            };
+            easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
             next(null);
             break;
         case 'getBalances':
             if (is_model) {
                 console.log('getBalances', msg.msgData);//TODO
+                let msgObj = {
+                    "msgType": "balances",
+                    "msgData": {
+                        "balances": { //DEBUG
+                            name1: 10.11,
+                            name2: 12.22,
+                            name3: 13.33,
+                            name4: 14.44,
+                            name5: 15.55
+                        }
+                    }
+                };
+                easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
                 next(null);
             }
             else next('Permission denied!');
             break;
-        case 'easyrtc_streamReceived'://stream received by customer
+        case 'easyrtc_streamReceived'://TODO: track webrtc connections on the server side (stream received by customer)
         default:
             if(CONFIG.DBG) console.log('MSG|'+msg.msgType+'|'+(msg.targetRoom||msg.targetEasyrtcid), connectionObj.getUsername(), msg.msgData);
             easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
