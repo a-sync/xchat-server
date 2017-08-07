@@ -50,9 +50,12 @@ var rtcServer = easyrtc.listen(
 );
 
 var customersData = {};
+var xChatAppObj = null;
 var rtcApp = function(err, appObj) {
     if (err) console.error(err);
     console.log('xchat-server init...');
+
+    xChatAppObj = appObj;
 
     appObj.events.on('authenticate', authListener);
 
@@ -72,6 +75,7 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
     else {
         validateAuthToken(credential)
             .then(validTokenData => {
+                credential.user_id = validTokenData.user_id || 0;
                 credential.balance = validTokenData.balance || 0;
                 credential.is_model = validTokenData.is_model || false;
                 credential.model_name = validTokenData.model_name || '';
@@ -89,13 +93,41 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
 
 function validateAuthToken(cred) {
     return new Promise((resolve, reject) => {
-        apiCall({token: cred.token})
+        apiCall({f: 'validateAuthToken', token: cred.token})
             .then(res => {
                 if (res.body.ok === true) resolve(res.body);
                 else reject(res.body);
             })
             .catch(err => {
                 if(CONFIG.DBG) console.error('validateAuthToken.error', err);
+                reject(err);
+            });
+    });
+}
+
+function getBalances(model_id, userIds) {
+    return new Promise((resolve, reject) => {
+        apiCall({f: 'getBalances', model_id: model_id, "userIds[]": userIds})
+            .then(res => {
+                if (res.body.ok === true) resolve(res.body);
+                else reject(res.body);
+            })
+            .catch(err => {
+                if(CONFIG.DBG) console.error('getBalances.error', err);
+                reject(err);
+            });
+    });
+}
+
+function spend(spendings) {
+    return new Promise((resolve, reject) => {
+        apiCall({f: 'spend', spending: spendings})
+            .then(res => {
+                if (res.body.ok === true) resolve(res.body);
+                else reject(res.body);
+            })
+            .catch(err => {
+                if(CONFIG.DBG) console.error('spend.error', err);
                 reject(err);
             });
     });
@@ -168,39 +200,88 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
 
     switch (msg.msgType) {
         case 'spend':
-            console.log('spend', msg.msgData);//TODO
+            if (CONFIG.DBG) console.log('spend', msg.msgData);
+
             let msgObj = {
                 msgType: 'balances',
                 msgData: {
-                    balances: { //DEBUG
-                        name1: 10.11,
-                        name2: 12.22,
-                        name3: 13.33,
-                        name4: 14.44,
-                        name5: 15.55
+                    spendings: {
+                        foo: 'bar'//TODO
                     }
                 }
             };
+
             easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
             next(null);
             break;
         case 'getBalances':
             if (is_model) {
-                console.log('getBalances', msg.msgData);//TODO
-                let msgObj = {
-                    "msgType": "balances",
-                    "msgData": {
-                        "balances": { //DEBUG
-                            name1: 10.11,
-                            name2: 12.22,
-                            name3: 13.33,
-                            name4: 14.44,
-                            name5: 15.55
-                        }
+                if (CONFIG.DBG) console.log('getBalances');
+
+                let model_name = connectionObj.getFieldValueSync('credential')['model_name'];
+                let model_id = connectionObj.getFieldValueSync('credential')['model_id'];
+                connectionObj.room('model.'+connectionObj.getUsername(), (err, connectionRoomObject) => {
+                    if (err) {
+                        console.error(err, model_name);
+                        next(err);
                     }
-                };
-                easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
-                next(null);
+                    else {
+                        let room = connectionRoomObject.getRoom();
+
+                        room.getConnectionObjects((err, conns) => {
+                            if (err) {
+                                console.error(err, model_name);
+                                next(err);
+                            }
+                            else {
+                                //console.log('getConnections', err, Object.keys(conns));
+
+                                let usersById = {};
+                                let userIds = [];
+                                Object.keys(conns).forEach(key => {
+                                    let user_id = conns[key].getFieldValueSync('credential')['user_id'];
+
+                                    userIds.push(user_id);
+                                    usersById[user_id] = {
+                                        name: conns[key].getUsername(),
+                                        easyrtcId: conns[key].getEasyrtcid()
+                                    };
+                                });
+
+                                getBalances(model_id, userIds)
+                                    .then(data => {
+                                        //console.log('balances for', model_name, data.balances);
+
+                                        let balances = [];
+                                        Object.keys(data.balances).forEach(key => {
+                                            let b = data.balances[key];
+
+                                            let u = usersById[ b.user_id ];
+                                            if (u) {
+                                                u.balance = b.balance;
+                                                balances.push(u);
+                                            }
+                                        });
+
+                                        let msgObj = {
+                                            msgType: 'balances',
+                                            msgData: {
+                                                balances: balances
+                                            }
+                                        };
+
+                                        easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
+                                        next(null);
+                                    })
+                                    .catch(err => {
+                                        let er = 'Failed to return balances. ' + (err.error ? err.error : '');
+                                        console.error(err, er);
+                                        next(er);
+                                    });
+                            }
+                        });
+                    }
+                });
             }
             else next('Permission denied!');
             break;
