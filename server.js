@@ -121,7 +121,7 @@ function getBalances(model_id, userIds) {
 
 function spend(spendings) {
     return new Promise((resolve, reject) => {
-        apiCall({f: 'spend', spending: spendings})
+        apiCall({f: 'spend', spendings: spendings})
             .then(res => {
                 if (res.body.ok === true) resolve(res.body);
                 else reject(res.body);
@@ -149,7 +149,7 @@ function authSuccess(connectionObj, next) {
     let easyrtcid = connectionObj.getEasyrtcid();
 
     if (customersData.hasOwnProperty(easyrtcid)) {
-        connectionObj.setField('balance', customersData[easyrtcid].balance, {"isShared":true});
+        connectionObj.setField('balance', customersData[easyrtcid].balance, {isShared:true});
 
         let p = {
             show: 'online',
@@ -174,7 +174,7 @@ function rtcAuthCallback(socket, easyrtcid, msg, socketCallback, callback) {
             return;
         }
 
-        connectionObj.setField('credential', msg.msgData.credential, {"isShared": false});
+        connectionObj.setField('credential', msg.msgData.credential, {isShared: false});
         if(CONFIG.DBG) console.log('! cred', connectionObj.getFieldValueSync('credential'));
 
         callback(err, connectionObj);
@@ -202,12 +202,17 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
         case 'spend':
             if (CONFIG.DBG) console.log('spend', msg.msgData);
 
+            //spend(spendings).then(data => {}).catch(err => {});
+
+            let balances = [];
+
+            balances.push({name:'name1',easyrtcId:'eid1',balance:11.11});//dbg
+            balances.push({name:'name2',easyrtcId:'eid2',balance:22.22});//dbg
+
             let msgObj = {
                 msgType: 'balances',
                 msgData: {
-                    spendings: {
-                        foo: 'bar'//TODO
-                    }
+                    balances: balances
                 }
             };
 
@@ -236,15 +241,16 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
                             else {
                                 //console.log('getConnections', err, Object.keys(conns));
 
-                                let usersById = {};
                                 let userIds = [];
+                                let usersById = {};
                                 Object.keys(conns).forEach(key => {
                                     let user_id = conns[key].getFieldValueSync('credential')['user_id'];
 
                                     userIds.push(user_id);
                                     usersById[user_id] = {
                                         name: conns[key].getUsername(),
-                                        easyrtcId: conns[key].getEasyrtcid()
+                                        easyrtcId: conns[key].getEasyrtcid(),
+                                        connsKey: key
                                     };
                                 });
 
@@ -258,8 +264,21 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
 
                                             let u = usersById[ b.user_id ];
                                             if (u) {
-                                                u.balance = b.balance;
+                                                let k = u.connsKey;
+                                                delete u['connsKey'];
+
+                                                u.balance = parseFloat(b.balance);
                                                 balances.push(u);
+
+                                                let connObj = conns[k];
+                                                if (connObj) {
+                                                    let curr_balance = parseFloat(connObj.getFieldValueSync('balance'));
+
+                                                    if (curr_balance !== u.balance) {
+                                                        connObj.setField('balance', u.balance, {isShared: true});
+                                                        //TODO: server msg to user about connection field update?
+                                                    }
+                                                }
                                             }
                                         });
 
