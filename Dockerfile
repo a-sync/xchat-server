@@ -10,4 +10,4 @@ WORKDIR /xchat-server
 
 ENTRYPOINT ["node", "server"]
 
-LABEL description="Xchat server"
+LABEL description="xchat server"
