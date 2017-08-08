@@ -73,8 +73,8 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
 
     if (username !== credential.name) next('Invalid auth.');
     else {
-        validateAuthToken(credential)
-            .then(validTokenData => {
+        validateAuthToken(credential).then(
+            validTokenData => {
                 credential.user_id = validTokenData.user_id || 0;
                 credential.balance = validTokenData.balance || 0;
                 credential.is_model = validTokenData.is_model || false;
@@ -83,11 +83,12 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
 
                 customersData[easyrtcid] = validTokenData;
                 next(null);
-            })
-            .catch(err => {
+            },
+            err => {
                 //TODO: next action? reload? ajax for new token?
                 next('Failed auth. ' + (err.error?err.error:''));
-            });
+            }
+        );
     }
 }
 
@@ -119,9 +120,9 @@ function getBalances(model_id, userIds) {
     });
 }
 
-function spend(spendings) {
+function spend(customer_name, model_name, source, amount) {
     return new Promise((resolve, reject) => {
-        apiCall({f: 'spend', spendings: spendings})
+        apiCall({f: 'spend', customer_name: customer_name, model_name: model_name, source: source, amount: amount})
             .then(res => {
                 if (res.body.ok === true) resolve(res.body);
                 else reject(res.body);
@@ -200,27 +201,33 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
 
     switch (msg.msgType) {
         case 'spend':
-            if (CONFIG.DBG) console.log('spend', msg.msgData);
+            if (CONFIG.DBG) console.log('spend', connectionObj.getUsername(), msg.msgData);
 
-            let balances = [];
+            let source = is_model ? 'model' : 'customer';
+            let customer_name = msg.msgData.customer_name;
+            let model_name = msg.msgData.model_name;
+            let amount = parseFloat(msg.msgData.amount);
 
-            balances.push({name:'name1',easyrtcId:'eid1',balance:11.11});//dbg
-            balances.push({name:'name2',easyrtcId:'eid2',balance:22.22});//dbg
-            //spend(spendings).then(data => {}).catch(err => {});
+            spend(customer_name, model_name, source, amount).then(
+                data => {
+                    //console.log('spend', data.balances);
 
-            // ########################################################################################
-            // ########################################################################################
-            // ########################################################################################
+                    let msgObj = {
+                        msgType: 'balances',
+                        msgData: {
+                            balances: data.balances || []
+                        }
+                    };
 
-            let msgObj = {
-                msgType: 'balances',
-                msgData: {
-                    balances: balances
+                    easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
+                    next(null);
+                },
+                err => {
+                    let er = 'Failed to store spending. ' + (err.error ? err.error : '');
+                    console.error(err, er);
+                    next(er);
                 }
-            };
-
-            easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
-            next(null);
+            );
             break;
         case 'getBalances':
             if (is_model) {
@@ -320,43 +327,42 @@ function getBalancesForConnections (thisConn, conns, callback) {
         };
     });
 
-    getBalances(model_id, userIds)
-        .then(
-            data => {
-                //console.log('balances for', model_name, data.balances);
+    getBalances(model_id, userIds).then(
+        data => {
+            //console.log('getBalances', data.balances);
 
-                let balances = [];
-                Object.keys(data.balances).forEach(key => {
-                    let b = data.balances[key];
+            let balances = [];
+            Object.keys(data.balances).forEach(key => {
+                let b = data.balances[key];
 
-                    let u = usersById[ b.user_id ];
-                    if (u) {
-                        let k = u.connsKey;
-                        delete u['connsKey'];
+                let u = usersById[ b.user_id ];
+                if (u) {
+                    let k = u.connsKey;
+                    delete u['connsKey'];
 
-                        u.balance = parseFloat(b.balance);
-                        balances.push(u);
+                    u.balance = parseFloat(b.balance);
+                    balances.push(u);
 
-                        let connObj = conns[k];
-                        if (connObj) {
-                            let curr_balance = parseFloat(connObj.getFieldValueSync('balance'));
+                    let connObj = conns[k];
+                    if (connObj) {
+                        let curr_balance = parseFloat(connObj.getFieldValueSync('balance'));
 
-                            if (curr_balance !== u.balance) {
-                                connObj.setField('balance', u.balance, {isShared: true});
-                                //TODO: server msg to user about connection field update?
-                            }
+                        if (curr_balance !== u.balance) {
+                            connObj.setField('balance', u.balance, {isShared: true});
+                            //TODO: server msg to user about connection field update?
                         }
                     }
-                });
+                }
+            });
 
-                callback(null, balances);
-            },
-            err => {
-                let er = 'Failed to return balances. ' + (err.error ? err.error : '');
-                console.error(err, er);
-                callback(er);
-            }
-        );
+            callback(null, balances);
+        },
+        err => {
+            let er = 'Failed to return balances. ' + (err.error ? err.error : '');
+            console.error(err, er);
+            callback(er);
+        }
+    );
 }
 
 webServer.listen(CONFIG.PORT, function () {
