@@ -202,12 +202,15 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
         case 'spend':
             if (CONFIG.DBG) console.log('spend', msg.msgData);
 
-            //spend(spendings).then(data => {}).catch(err => {});
-
             let balances = [];
 
             balances.push({name:'name1',easyrtcId:'eid1',balance:11.11});//dbg
             balances.push({name:'name2',easyrtcId:'eid2',balance:22.22});//dbg
+            //spend(spendings).then(data => {}).catch(err => {});
+
+            // ########################################################################################
+            // ########################################################################################
+            // ########################################################################################
 
             let msgObj = {
                 msgType: 'balances',
@@ -221,10 +224,9 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
             break;
         case 'getBalances':
             if (is_model) {
-                if (CONFIG.DBG) console.log('getBalances');
+                if (CONFIG.DBG) console.log('getBalances', msg.msgData);
 
                 let model_name = connectionObj.getFieldValueSync('credential')['model_name'];
-                let model_id = connectionObj.getFieldValueSync('credential')['model_id'];
                 connectionObj.room('model.'+connectionObj.getUsername(), (err, connectionRoomObject) => {
                     if (err) {
                         console.error(err, model_name);
@@ -233,72 +235,63 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
                     else {
                         let room = connectionRoomObject.getRoom();
 
-                        room.getConnectionObjects((err, conns) => {
-                            if (err) {
-                                console.error(err, model_name);
-                                next(err);
-                            }
-                            else {
-                                //console.log('getConnections', err, Object.keys(conns));
+                        if (msg.msgData && Object.keys(msg.msgData).length) {
 
-                                let userIds = [];
-                                let usersById = {};
-                                Object.keys(conns).forEach(key => {
-                                    let user_id = conns[key].getFieldValueSync('credential')['user_id'];
+                            let conns = [];
+                            Object.keys(msg.msgData).forEach(key => {
+                                room.getConnectionWithEasyrtcid(msg.msgData[key], (err, connObj) => {
+                                    if (err) console.error(err);
+                                    else if (connObj) {
+                                        conns.push(connObj);
+                                    }
 
-                                    userIds.push(user_id);
-                                    usersById[user_id] = {
-                                        name: conns[key].getUsername(),
-                                        easyrtcId: conns[key].getEasyrtcid(),
-                                        connsKey: key
-                                    };
-                                });
+                                    delete msg.msgData[key];
 
-                                getBalances(model_id, userIds)
-                                    .then(data => {
-                                        //console.log('balances for', model_name, data.balances);
-
-                                        let balances = [];
-                                        Object.keys(data.balances).forEach(key => {
-                                            let b = data.balances[key];
-
-                                            let u = usersById[ b.user_id ];
-                                            if (u) {
-                                                let k = u.connsKey;
-                                                delete u['connsKey'];
-
-                                                u.balance = parseFloat(b.balance);
-                                                balances.push(u);
-
-                                                let connObj = conns[k];
-                                                if (connObj) {
-                                                    let curr_balance = parseFloat(connObj.getFieldValueSync('balance'));
-
-                                                    if (curr_balance !== u.balance) {
-                                                        connObj.setField('balance', u.balance, {isShared: true});
-                                                        //TODO: server msg to user about connection field update?
+                                    if (Object.keys(msg.msgData).length === 0) {
+                                        getBalancesForConnections(connectionObj, conns, (err, balances) => {
+                                            if (err) next(err);
+                                            else {
+                                                let msgObj = {
+                                                    msgType: 'balances',
+                                                    msgData: {
+                                                        balances: balances
                                                     }
-                                                }
+                                                };
+
+                                                easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
+                                                next(null);
                                             }
                                         });
+                                    }
+                                });
+                            });
+                        }
+                        else {
+                            room.getConnectionObjects((err, conns) => {
+                                if (err) {
+                                    console.error(err, model_name);
+                                    next(err);
+                                }
+                                else {
+                                    //console.log('getConnections', err, Object.keys(conns));
 
-                                        let msgObj = {
-                                            msgType: 'balances',
-                                            msgData: {
-                                                balances: balances
-                                            }
-                                        };
+                                    getBalancesForConnections(connectionObj, conns, (err, balances) => {
+                                        if (err) next(err);
+                                        else {
+                                            let msgObj = {
+                                                msgType: 'balances',
+                                                msgData: {
+                                                    balances: balances
+                                                }
+                                            };
 
-                                        easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
-                                        next(null);
-                                    })
-                                    .catch(err => {
-                                        let er = 'Failed to return balances. ' + (err.error ? err.error : '');
-                                        console.error(err, er);
-                                        next(er);
+                                            easyrtc.util.sendSocketCallbackMsg(connectionObj.getEasyrtcid(), socketCallback, msgObj, connectionObj.getApp());
+                                            next(null);
+                                        }
                                     });
-                            }
-                        });
+                                }
+                            });
+                        }
                     }
                 });
             }
@@ -309,6 +302,61 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
             if(CONFIG.DBG) console.log('MSG|'+msg.msgType+'|'+(msg.targetRoom||msg.targetEasyrtcid), connectionObj.getUsername(), msg.msgData);
             easyrtc.events.defaultListeners.easyrtcMsg(connectionObj, msg, socketCallback, next);
     }
+}
+
+function getBalancesForConnections (thisConn, conns, callback) {
+    let model_id = thisConn.getFieldValueSync('credential')['model_id'];
+
+    let userIds = [];
+    let usersById = {};
+    Object.keys(conns).forEach(key => {
+        let user_id = conns[key].getFieldValueSync('credential')['user_id'];
+
+        userIds.push(user_id);
+        usersById[user_id] = {
+            name: conns[key].getUsername(),
+            easyrtcId: conns[key].getEasyrtcid(),
+            connsKey: key
+        };
+    });
+
+    getBalances(model_id, userIds)
+        .then(
+            data => {
+                //console.log('balances for', model_name, data.balances);
+
+                let balances = [];
+                Object.keys(data.balances).forEach(key => {
+                    let b = data.balances[key];
+
+                    let u = usersById[ b.user_id ];
+                    if (u) {
+                        let k = u.connsKey;
+                        delete u['connsKey'];
+
+                        u.balance = parseFloat(b.balance);
+                        balances.push(u);
+
+                        let connObj = conns[k];
+                        if (connObj) {
+                            let curr_balance = parseFloat(connObj.getFieldValueSync('balance'));
+
+                            if (curr_balance !== u.balance) {
+                                connObj.setField('balance', u.balance, {isShared: true});
+                                //TODO: server msg to user about connection field update?
+                            }
+                        }
+                    }
+                });
+
+                callback(null, balances);
+            },
+            err => {
+                let er = 'Failed to return balances. ' + (err.error ? err.error : '');
+                console.error(err, er);
+                callback(er);
+            }
+        );
 }
 
 webServer.listen(CONFIG.PORT, function () {
