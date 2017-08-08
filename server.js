@@ -208,14 +208,39 @@ function rtcMsg(connectionObj, msg, socketCallback, next) {
             let model_name = msg.msgData.model_name;
             let amount = parseFloat(msg.msgData.amount);
 
+            let customer_easyrtcId = msg.msgData.customer_easyrtcId;
+
             spend(customer_name, model_name, source, amount).then(
                 data => {
                     //console.log('spend', data.balances);
 
+                    let balances = [];
+                    Object.keys(data.balances).forEach(key => {
+                        let b = data.balances[key];
+
+                        if (is_model && b.name === customer_name) {
+                            connectionObj.room('model.'+model_name, (err, connectionRoomObject) => {
+                                if (err) console.error(err);
+                                else {
+                                    let room = connectionRoomObject.getRoom();
+
+                                    room.getConnectionWithEasyrtcid(customer_easyrtcId, (err, connObj) => {
+                                        if (err) console.error(err);
+                                        else {
+                                            connObj.setField('balance', b.balance, {isShared: true});
+                                        }
+                                    });
+                                }
+                            });
+                        }
+
+                        balances.push(b);
+                    });
+
                     let msgObj = {
                         msgType: 'balances',
                         msgData: {
-                            balances: data.balances || []
+                            balances: balances
                         }
                     };
 
@@ -349,7 +374,6 @@ function getBalancesForConnections (thisConn, conns, callback) {
 
                         if (curr_balance !== u.balance) {
                             connObj.setField('balance', u.balance, {isShared: true});
-                            //TODO: server msg to user about connection field update?
                         }
                     }
                 }
