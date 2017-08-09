@@ -92,58 +92,6 @@ function authListener(socket, easyrtcid, appName, username, credential, easyrtcA
     }
 }
 
-function validateAuthToken(cred) {
-    return new Promise((resolve, reject) => {
-        apiCall({f: 'validateAuthToken', token: cred.token})
-            .then(res => {
-                if (res.body.ok === true) resolve(res.body);
-                else reject(res.body);
-            })
-            .catch(err => {
-                if(CONFIG.DBG) console.error('validateAuthToken.error', err);
-                reject(err);
-            });
-    });
-}
-
-function getBalances(model_id, userIds) {
-    return new Promise((resolve, reject) => {
-        apiCall({f: 'getBalances', model_id: model_id, "userIds[]": userIds})
-            .then(res => {
-                if (res.body.ok === true) resolve(res.body);
-                else reject(res.body);
-            })
-            .catch(err => {
-                if(CONFIG.DBG) console.error('getBalances.error', err);
-                reject(err);
-            });
-    });
-}
-
-function spend(customer_name, model_name, source, amount) {
-    return new Promise((resolve, reject) => {
-        apiCall({f: 'spend', customer_name: customer_name, model_name: model_name, source: source, amount: amount})
-            .then(res => {
-                if (res.body.ok === true) resolve(res.body);
-                else reject(res.body);
-            })
-            .catch(err => {
-                if(CONFIG.DBG) console.error('spend.error', err);
-                reject(err);
-            });
-    });
-}
-
-function apiCall(data) {
-    data.api_key = CONFIG.API_KEY;
-
-    return got.post(CONFIG.API_URL, {
-        body: data,
-        json: true,
-        form: true
-    });
-}
-
 function authSuccess(connectionObj, next) {
     if(CONFIG.DBG) console.log('! authenticated', connectionObj.getUsername());
 
@@ -387,6 +335,58 @@ function getBalancesForConnections (thisConn, conns, callback) {
             callback(er);
         }
     );
+}
+
+function apiCall(data) {
+    data.api_key = CONFIG.API_KEY;
+
+    return got.post(CONFIG.API_URL, {
+        body: data,
+        json: true,
+        form: true
+    });
+}
+
+function validateAuthToken(cred) {
+    return new Promise((resolve, reject) => {
+        apiCall({f: 'validateAuthToken', token: cred.token})
+            .then(res => {
+                if (res.body.ok === true) resolve(res.body);
+                else reject(res.body);
+            })
+            .catch(err => {
+                if(CONFIG.DBG) console.error('validateAuthToken.error', err);
+                reject(err);
+            });
+    });
+}
+
+function getBalances(model_id, userIds) {
+    return new Promise((resolve, reject) => {
+        apiCall({f: 'getBalances', model_id: model_id, "userIds[]": userIds})
+            .then(res => {
+                if (res.body.ok === true) resolve(res.body);
+                else reject(res.body);
+            })
+            .catch(err => {
+                if(CONFIG.DBG) console.error('getBalances.error', err);
+                reject(err);
+            });
+    });
+}
+
+function spend(customer_name, model_name, source, amount) {
+    return new Promise((resolve, reject) => {
+        apiCall({f: 'spend', customer_name: customer_name, model_name: model_name, source: source, amount: amount})
+            .then(res => {
+                if (res.body.ok === true) resolve(res.body);
+                else reject(res.body);
+            })
+            .catch(err => {
+                if(CONFIG.DBG) console.error('spend.error', err);
+                reject(err);
+            });
+    });
 }
 
 webServer.listen(CONFIG.PORT, function () {
